@@ -32,7 +32,7 @@ if count >= THRESHOLD:
             "hookEventName": "PostToolUse",
             "additionalContext": (
                 "CHECKPOINT REMINDER: 10+ tool calls have been made since the last checkpoint. "
-                "Consider running ai-guardrails CHECKPOINT phase to save progress to MEMORY.md."
+                "Consider running claude-memory-guard CHECKPOINT phase to save progress to MEMORY.md."
             )
         }
     }))

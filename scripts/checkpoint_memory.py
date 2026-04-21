@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-checkpoint_memory.py — PreCompact hook for ai-guardrails memory system.
+checkpoint_memory.py — PreCompact hook for claude-memory-guard memory system.
 
 Called by Claude Code before context compaction. If the current project has
 an active in-progress task in MEMORY.md, writes a minimal INPROGRESS block
@@ -80,7 +80,7 @@ Files modified so far:
 Known blockers:
 - none
 
-Resume instruction: Run ai-guardrails RESTORE to reconstruct context, then verify last goal in ACTIVE section and review recent git diff.
+Resume instruction: Run claude-memory-guard RESTORE to reconstruct context, then verify last goal in ACTIVE section and review recent git diff.
 """
 
 

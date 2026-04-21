@@ -33,8 +33,8 @@ PYTHON3=$(command -v python3)
 mkdir -p "$AGENTS_DIR" "$SCRIPTS_DIR"
 
 # --- Copy agent definition ---
-cp "$REPO_DIR/agents/ai-guardrails.md" "$AGENTS_DIR/ai-guardrails.md"
-echo -e "${GREEN}✓${RESET} Copied agents/ai-guardrails.md → $AGENTS_DIR/"
+cp "$REPO_DIR/agents/claude-memory-guard.md" "$AGENTS_DIR/claude-memory-guard.md"
+echo -e "${GREEN}✓${RESET} Copied agents/claude-memory-guard.md → $AGENTS_DIR/"
 
 # --- Copy scripts ---
 for script in \

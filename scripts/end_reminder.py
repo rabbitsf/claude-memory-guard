@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-end_reminder.py — Stop hook for ai-guardrails memory system.
+end_reminder.py — Stop hook for claude-memory-guard memory system.
 
 Fires after each Claude response. If the current project has an active
 in-progress task in MEMORY.md, injects a reminder to run the END phase
@@ -72,13 +72,13 @@ def main() -> int:
     project_name = Path(project_dir).name
 
     message = (
-        f"<ai-guardrails-end-reminder project=\"{project_name}\">\n"
+        f"<claude-memory-guard-end-reminder project=\"{project_name}\">\n"
         f"Active task still in progress — Status: {status} | Goal: {goal}\n"
-        "When code changes are complete, run ai-guardrails END phase to update:\n"
+        "When code changes are complete, run claude-memory-guard END phase to update:\n"
         "  - docs/PROJECT_GUIDE.md (canonical implementations)\n"
         "  - docs/CHANGELOG_AI.md (audit log)\n"
         "  - MEMORY.md (status → completed, INPROGRESS cleared)\n"
-        "</ai-guardrails-end-reminder>"
+        "</claude-memory-guard-end-reminder>"
     )
 
     # print(json.dumps({"systemMessage": message}))

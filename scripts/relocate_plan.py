@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-relocate_plan.py — PostToolUse:Write hook for ai-guardrails plan management.
+relocate_plan.py — PostToolUse:Write hook for claude-memory-guard plan management.
 
 When Claude writes a plan to ~/.claude/plans/<random-name>.md (via built-in
 plan mode), this hook automatically moves it to the current project's

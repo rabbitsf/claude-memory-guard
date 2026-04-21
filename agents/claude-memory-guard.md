@@ -1,5 +1,5 @@
 ---
-name: ai-guardrails
+name: claude-memory-guard
 description: |
   Use this agent proactively before writing/editing code to maintain project
   knowledge and prevent duplication.
@@ -17,7 +17,7 @@ description: |
   user: "Let's continue working on the project"
   assistant: "Let me restore context from project documentation."
   <commentary>
-  Session start. Trigger ai-guardrails in RESTORE phase to read existing docs and generate summary.
+  Session start. Trigger claude-memory-guard in RESTORE phase to read existing docs and generate summary.
   </commentary>
   </example>
 
@@ -26,7 +26,7 @@ description: |
   user: "Let's start working on this project"
   assistant: "Let me set up the project rules first."
   <commentary>
-  CLAUDE.md missing. Trigger ai-guardrails in INIT phase to create standard rules.
+  CLAUDE.md missing. Trigger claude-memory-guard in INIT phase to create standard rules.
   </commentary>
   </example>
 
@@ -35,7 +35,7 @@ description: |
   user: "Add a user authentication feature"
   assistant: "Let me check project documentation first."
   <commentary>
-  PROJECT_GUIDE.md missing. Trigger ai-guardrails in BOOTSTRAP phase.
+  PROJECT_GUIDE.md missing. Trigger claude-memory-guard in BOOTSTRAP phase.
   </commentary>
   </example>
 
@@ -44,7 +44,7 @@ description: |
   user: "I want to add email validation to the form"
   assistant: "Let me plan this change safely."
   <commentary>
-  User stated goal. Trigger ai-guardrails in START phase to plan.
+  User stated goal. Trigger claude-memory-guard in START phase to plan.
   </commentary>
   </example>
 
@@ -53,7 +53,7 @@ description: |
   user: "Fix this typo in the header"
   assistant: "Let me verify the canonical location."
   <commentary>
-  Small edit. Trigger ai-guardrails in QUICK-CHECK phase for lightweight verification.
+  Small edit. Trigger claude-memory-guard in QUICK-CHECK phase for lightweight verification.
   </commentary>
   </example>
 
@@ -62,7 +62,7 @@ description: |
   user: "That looks good, we're done"
   assistant: "Let me update documentation."
   <commentary>
-  Task complete. Trigger ai-guardrails in END phase to update docs.
+  Task complete. Trigger claude-memory-guard in END phase to update docs.
   </commentary>
   </example>
 
@@ -107,7 +107,7 @@ Determine which phase to run based on context:
 5. **START** — user states a new coding goal
 6. **QUICK-CHECK** — user requests a small edit (typo, minor fix, not a new feature)
 7. **END** — code changes completed, user says "done"/"looks good"/"we're done"
-8. **ONBOARD** — user says "onboard this project"/"set up ai-guardrails", or RESTORE detects MEMORY.md missing on existing project
+8. **ONBOARD** — user says "onboard this project"/"set up claude-memory-guard", or RESTORE detects MEMORY.md missing on existing project
 
 Execution order: RESTORE → INIT → BOOTSTRAP → START/QUICK-CHECK → (coding happens) → CHECKPOINT (if needed) → END
 
@@ -456,7 +456,7 @@ Session state preserved for future context restoration.
 
 ## ONBOARD Phase
 
-**Trigger:** User says "onboard this project"/"set up ai-guardrails" on existing project with code, OR RESTORE detects MEMORY.md missing on a project that already has code
+**Trigger:** User says "onboard this project"/"set up claude-memory-guard" on existing project with code, OR RESTORE detects MEMORY.md missing on a project that already has code
 
 **Purpose:** Retrofit existing projects without destroying what's there.
 
@@ -561,7 +561,7 @@ When creating MEMORY.md for a project, use this structure. Replace `[Project Nam
 
 ```markdown
 # MEMORY.md — [Project Name]
-# Auto-loaded by Claude Code. Keep under 150 lines. Updated by ai-guardrails.
+# Auto-loaded by Claude Code. Keep under 150 lines. Updated by claude-memory-guard.
 # Last updated: [YYYY-MM-DD HH:MM]
 
 <!-- SECTION: ACTIVE -->

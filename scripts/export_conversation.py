@@ -7,7 +7,7 @@ Usage:
 
 If no session_id provided, exports the most recent conversation.
 Project directory is resolved dynamically from CLAUDE_PROJECT_DIR env var
-or the current working directory — consistent with other ai-guardrails hooks.
+or the current working directory — consistent with other claude-memory-guard hooks.
 """
 
 import json

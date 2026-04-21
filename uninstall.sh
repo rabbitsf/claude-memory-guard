@@ -22,9 +22,9 @@ echo ""
 PYTHON3=$(command -v python3 || true)
 
 # --- Remove agent ---
-if [ -f "$AGENTS_DIR/ai-guardrails.md" ]; then
-  rm "$AGENTS_DIR/ai-guardrails.md"
-  echo -e "${GREEN}✓${RESET} Removed ai-guardrails.md"
+if [ -f "$AGENTS_DIR/claude-memory-guard.md" ]; then
+  rm "$AGENTS_DIR/claude-memory-guard.md"
+  echo -e "${GREEN}✓${RESET} Removed claude-memory-guard.md"
 fi
 
 # --- Remove scripts ---

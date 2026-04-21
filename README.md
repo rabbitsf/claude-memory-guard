@@ -44,7 +44,7 @@ Then **restart Claude Code** (or open a new session). The agent will activate au
 ## What gets installed
 
 ```
-~/.claude/agents/ai-guardrails.md       ← the agent definition
+~/.claude/agents/claude-memory-guard.md       ← the agent definition
 ~/.claude/scripts/
     session_start_reminder.py           ← SessionStart + PostCompact hook
     checkpoint_memory.py                ← PreCompact hook (safety net)
@@ -150,7 +150,7 @@ To enforce this, add the following to your `~/.claude/CLAUDE.md`:
 ```markdown
 ## Superpowers: Conditional Auto-Trigger
 
-If ai-guardrails IS active → restricted superpowers mode:
+If claude-memory-guard IS active → restricted superpowers mode:
 - Do NOT invoke: `writing-plans`, `executing-plans`, `brainstorming`, `finishing-a-development-branch`
 - Only invoke when the specific situation demands it:
   - `systematic-debugging` — when debugging a concrete bug or test failure

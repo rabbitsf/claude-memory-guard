@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-session_start_reminder.py — SessionStart hook for ai-guardrails.
+session_start_reminder.py — SessionStart hook for claude-memory-guard.
 
 Injects a context reminder into Claude's first turn instructing it to run
-ai-guardrails RESTORE. If MEMORY.md has an in-progress task or active goal,
+claude-memory-guard RESTORE. If MEMORY.md has an in-progress task or active goal,
 the reminder is escalated so Claude prioritises surfacing it immediately.
 
 Also auto-creates missing scaffolding files (CLAUDE.md, MEMORY.md,
@@ -95,7 +95,7 @@ IMPORTANT: Always restate the goal before doing anything.
 
 MEMORY_MD_TEMPLATE = """\
 # MEMORY.md — {project_name}
-# Auto-loaded by Claude Code. Keep under 150 lines. Updated by ai-guardrails.
+# Auto-loaded by Claude Code. Keep under 150 lines. Updated by claude-memory-guard.
 # Last updated: {date}
 
 <!-- SECTION: ACTIVE -->
@@ -376,13 +376,13 @@ def build_message(
     # --- Case 1: Memory was just created (or still missing somehow) ---
     if memory is None:
         return (
-            f"<ai-guardrails-reminder project=\"{project_name}\">\n"
+            f"<claude-memory-guard-reminder project=\"{project_name}\">\n"
             f"{scaffolding_note}"
-            "MANDATORY: Run ai-guardrails agent — RESTORE phase — before your first response.\n"
+            "MANDATORY: Run claude-memory-guard agent — RESTORE phase — before your first response.\n"
             "MEMORY.md not found for this project.\n"
             "→ RESTORE will detect this and trigger ONBOARD to create CLAUDE.md, "
             "docs/PROJECT_GUIDE.md, and MEMORY.md.\n"
-            "</ai-guardrails-reminder>"
+            "</claude-memory-guard-reminder>"
         )
 
     status = active_status(memory)
@@ -406,7 +406,7 @@ def build_message(
     # --- Case 2: In-progress task detected ---
     if inprogress or status.lower() not in ("none", "completed", "—", "-"):
         lines = [
-            f"<ai-guardrails-reminder project=\"{project_name}\">",
+            f"<claude-memory-guard-reminder project=\"{project_name}\">",
         ]
         if scaffolding_note:
             lines.append(scaffolding_note.rstrip())
@@ -415,7 +415,7 @@ def build_message(
         if stale_note:
             lines.append(stale_note.rstrip())
         lines += [
-            "⚠️  IN-PROGRESS TASK DETECTED — Run ai-guardrails RESTORE immediately.",
+            "⚠️  IN-PROGRESS TASK DETECTED — Run claude-memory-guard RESTORE immediately.",
             f"    Goal:   {goal}",
             f"    Status: {status}",
         ]
@@ -424,22 +424,22 @@ def build_message(
         lines += [
             "RESTORE must surface this as RESUMING IN-PROGRESS TASK before anything else.",
             "Read the plan file header (first 15 lines) to find the first unchecked task.",
-            "</ai-guardrails-reminder>",
+            "</claude-memory-guard-reminder>",
         ]
         return "\n".join(lines)
 
     # --- Case 3: Clean session ---
     return (
-        f"<ai-guardrails-reminder project=\"{project_name}\">\n"
+        f"<claude-memory-guard-reminder project=\"{project_name}\">\n"
         f"{scaffolding_note}"
         f"{gap_note}"
         f"{stale_note}"
-        "Run ai-guardrails RESTORE phase before your first response.\n"
+        "Run claude-memory-guard RESTORE phase before your first response.\n"
         "MEMORY.md is already in context — do NOT re-read it.\n"
         "Fast path: Status is clean → output a brief session summary and proceed.\n"
         "Check: CLAUDE.md present? docs/PROJECT_GUIDE.md present? "
         "If either missing, run INIT / BOOTSTRAP.\n"
-        "</ai-guardrails-reminder>"
+        "</claude-memory-guard-reminder>"
     )
 
 
