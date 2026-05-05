@@ -125,6 +125,26 @@ if skipped:
     print(f"  Already present (skipped): {', '.join(skipped)}")
 PYEOF
 
+# --- Append coordination block to ~/.claude/CLAUDE.md ---
+GLOBAL_CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
+TEMPLATE="$REPO_DIR/templates/global-claude-md-block.md"
+SENTINEL="<!-- BEGIN claude-memory-guard -->"
+
+echo ""
+echo "Updating $GLOBAL_CLAUDE_MD ..."
+
+if [ -f "$GLOBAL_CLAUDE_MD" ] && grep -qF "$SENTINEL" "$GLOBAL_CLAUDE_MD"; then
+  echo -e "  ${YELLOW}Already present${RESET} (skipped)"
+else
+  if [ ! -f "$GLOBAL_CLAUDE_MD" ]; then
+    printf '# ~/.claude/CLAUDE.md — Global AI Rules\n\n' > "$GLOBAL_CLAUDE_MD"
+    echo -e "  ${GREEN}Created${RESET} $GLOBAL_CLAUDE_MD"
+  fi
+  printf '\n' >> "$GLOBAL_CLAUDE_MD"
+  cat "$TEMPLATE" >> "$GLOBAL_CLAUDE_MD"
+  echo -e "  ${GREEN}✓${RESET} Appended claude-memory-guard coordination block"
+fi
+
 echo ""
 echo -e "${GREEN}Installation complete.${RESET}"
 echo ""

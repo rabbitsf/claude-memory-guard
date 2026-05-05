@@ -31,7 +31,7 @@ claude-memory-guard runs automatically at key moments in your Claude Code sessio
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/claude-memory-guard.git
+git clone https://github.com/rabbitsf/claude-memory-guard.git
 cd claude-memory-guard
 chmod +x install.sh
 ./install.sh
@@ -53,7 +53,22 @@ Then **restart Claude Code** (or open a new session). The agent will activate au
     end_reminder.py                     ← Stop hook (end-of-turn reminder)
     export_conversation.py              ← PreCompact hook (transcript exporter)
 ~/.claude/settings.json                 ← hooks merged in (existing content preserved)
+~/.claude/CLAUDE.md                     ← coordination rules appended (created if absent)
 ```
+
+### What gets added to `~/.claude/CLAUDE.md`
+
+`~/.claude/CLAUDE.md` is the global instruction file Claude Code loads in every session. claude-memory-guard appends a delimited block to it that tells Claude three things:
+
+**1. When to invoke each phase** — a trigger table mapping session moments to RESTORE / START / CHECKPOINT / END / etc.
+
+**2. How to handle MEMORY.md** — MEMORY.md is auto-injected by Claude Code, so Claude must never re-read it manually. The block encodes this rule and tells Claude to surface any INPROGRESS block immediately on session start.
+
+**3. Plugin integration rules** — if you also use [Superpowers](https://github.com/anthropics/superpowers) or [claude-mem](https://github.com/thedotmack/claude-mem), the block defines strict role boundaries so the tools don't duplicate each other's work.
+
+The block is wrapped in sentinel comments (`<!-- BEGIN claude-memory-guard -->` / `<!-- END claude-memory-guard -->`). `install.sh` skips it if already present; `uninstall.sh` removes it cleanly. Any content you already have in `~/.claude/CLAUDE.md` is preserved.
+
+The template lives at `templates/global-claude-md-block.md` in this repo if you want to inspect or customise it before installing.
 
 ---
 
@@ -90,7 +105,7 @@ The agent will audit what exists, create any missing files, and seed `MEMORY.md`
 ./uninstall.sh
 ```
 
-This removes the agent, scripts, and hook entries from `settings.json`. Project files (`CLAUDE.md`, `docs/`, `MEMORY.md`) are **not** removed — they belong to your projects.
+This removes the agent, scripts, hook entries from `settings.json`, and the coordination block from `~/.claude/CLAUDE.md`. Project files (`CLAUDE.md`, `docs/`, `MEMORY.md`) are **not** removed — they belong to your projects.
 
 ---
 
@@ -145,20 +160,7 @@ When claude-memory-guard is active, Superpowers runs in a restricted mode. Becau
 | claude-memory-guard active | `writing-plans`, `executing-plans`, `brainstorming`, `finishing-a-development-branch` | claude-memory-guard's START / CHECKPOINT / END phases own these |
 | claude-memory-guard active | All others available | `systematic-debugging`, `verification-before-completion`, `test-driven-development`, `receiving-code-review`, `dispatching-parallel-agents` still apply |
 
-To enforce this, add the following to your `~/.claude/CLAUDE.md`:
-
-```markdown
-## Superpowers: Conditional Auto-Trigger
-
-If claude-memory-guard IS active → restricted superpowers mode:
-- Do NOT invoke: `writing-plans`, `executing-plans`, `brainstorming`, `finishing-a-development-branch`
-- Only invoke when the specific situation demands it:
-  - `systematic-debugging` — when debugging a concrete bug or test failure
-  - `verification-before-completion` — before claiming a task is done
-  - `test-driven-development` — when writing new features or bug fixes
-  - `receiving-code-review` — when handling PR review feedback
-  - `dispatching-parallel-agents` — when parallelizing independent tasks
-```
+These rules are included automatically in the coordination block that `install.sh` appends to `~/.claude/CLAUDE.md`. No manual steps needed.
 
 ---
 
@@ -185,11 +187,7 @@ The two systems cover different memory layers and must not duplicate each other'
 1. claude-memory-guard RESTORE runs first — surfaces `MEMORY.md` state and any in-progress task
 2. Then invoke `claude-mem:mem-search` to retrieve episodic context from past sessions not captured in `MEMORY.md` (especially useful after a gap of several days)
 
-**Boundaries to respect:**
-
-- Do NOT use `claude-mem:make-plan` when claude-memory-guard is active — the START phase owns plan files
-- Do NOT use `claude-mem:do` for execution tracking — CHECKPOINT / END owns this
-- Do NOT duplicate `MEMORY.md` structured state into claude-mem corpora
+These boundaries are encoded in the coordination block that `install.sh` appends to `~/.claude/CLAUDE.md`. No manual steps needed.
 
 ---
 

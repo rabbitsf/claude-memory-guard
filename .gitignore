@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# AI workflow artifacts — local only, never commit
+docs/
+CLAUDE.md

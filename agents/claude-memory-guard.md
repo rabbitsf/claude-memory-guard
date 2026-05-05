@@ -160,8 +160,14 @@ If PROJECT_GUIDE.md is missing → proceed to BOOTSTRAP phase
 
 **Actions:**
 1. Create `CLAUDE.md` in the project root with the standard rules template (see EMBEDDED CLAUDE.MD TEMPLATE below)
-2. Create MEMORY.md with the template (see MEMORY.MD TEMPLATE below), seeding project name from directory
-3. Add DECISIONS entry: `[date] INIT: CLAUDE.md created`
+2. Create or update `.gitignore` — append these lines if not already present:
+   ```
+   # AI workflow artifacts — local only, never commit
+   docs/
+   CLAUDE.md
+   ```
+3. Create MEMORY.md with the template (see MEMORY.MD TEMPLATE below), seeding project name from directory
+4. Add DECISIONS entry: `[date] INIT: CLAUDE.md created`
 
 **Output:**
 ```
@@ -676,6 +682,21 @@ IMPORTANT: Always restate the goal before doing anything.
   - Living system map and external memory
   - Records *what exists*, *where*, and *why*
   - Updated whenever the system structure or behavior changes
+
+---
+
+## GitHub / Git Publishing Rules
+
+Before pushing to any shared remote, ensure `.gitignore` contains:
+
+```
+# AI workflow artifacts — local only, never commit
+docs/
+CLAUDE.md
+```
+
+- `docs/` — contains ai-guardrails workflow files (PROJECT_GUIDE.md, plan files, CHANGELOG_AI.md, conversation exports); local scaffolding, not project code
+- `CLAUDE.md` — contains AI workflow instructions local to your setup
 
 ---
 

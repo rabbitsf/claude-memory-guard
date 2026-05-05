@@ -98,6 +98,47 @@ else:
 PYEOF
 fi
 
+# --- Remove coordination block from ~/.claude/CLAUDE.md ---
+GLOBAL_CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
+SENTINEL_BEGIN="<!-- BEGIN claude-memory-guard -->"
+SENTINEL_END="<!-- END claude-memory-guard -->"
+
+if [ -f "$GLOBAL_CLAUDE_MD" ] && grep -qF "$SENTINEL_BEGIN" "$GLOBAL_CLAUDE_MD"; then
+  echo ""
+  echo "Removing coordination block from $GLOBAL_CLAUDE_MD ..."
+  if [ -n "$PYTHON3" ]; then
+    "$PYTHON3" - "$GLOBAL_CLAUDE_MD" "$SENTINEL_BEGIN" "$SENTINEL_END" <<'PYEOF'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+begin = sys.argv[2]
+end   = sys.argv[3]
+
+text = path.read_text()
+start_idx = text.find(begin)
+end_idx   = text.find(end)
+
+if start_idx == -1 or end_idx == -1:
+    print("  Block markers not found — nothing removed")
+    sys.exit(0)
+
+# Include the trailing newline after the end sentinel if present
+end_idx += len(end)
+if end_idx < len(text) and text[end_idx] == '\n':
+    end_idx += 1
+
+# Also trim any leading blank line before the sentinel
+trimmed = text[:start_idx].rstrip('\n')
+remainder = text[end_idx:]
+result = trimmed + ('\n' if remainder.strip() else '') + remainder
+
+path.write_text(result)
+print("  Removed claude-memory-guard coordination block")
+PYEOF
+  fi
+fi
+
 echo ""
 echo -e "${GREEN}Uninstall complete.${RESET} Restart Claude Code to apply changes."
 echo ""
