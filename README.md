@@ -41,6 +41,20 @@ Then **restart Claude Code** (or open a new session). The agent will activate au
 
 ---
 
+## Updating
+
+If you installed an earlier version, updating is a two-step process:
+
+```bash
+cd claude-memory-guard
+git pull
+./install.sh
+```
+
+`install.sh` is safe to re-run — it overwrites the agent definition and scripts with the latest versions, skips any hooks already present in `settings.json`, and appends the `~/.claude/CLAUDE.md` coordination block if it isn't there yet. Then restart Claude Code.
+
+---
+
 ## What gets installed
 
 ```
