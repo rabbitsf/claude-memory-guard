@@ -66,7 +66,15 @@ Then **restart Claude Code** (or open a new session). The agent will activate au
 
 **3. Plugin integration rules** — if you also use [Superpowers](https://github.com/anthropics/superpowers) or [claude-mem](https://github.com/thedotmack/claude-mem), the block defines strict role boundaries so the tools don't duplicate each other's work.
 
-The block is wrapped in sentinel comments (`<!-- BEGIN claude-memory-guard -->` / `<!-- END claude-memory-guard -->`). `install.sh` skips it if already present; `uninstall.sh` removes it cleanly. Any content you already have in `~/.claude/CLAUDE.md` is preserved.
+The block is wrapped in sentinel comments (`<!-- BEGIN claude-memory-guard -->` / `<!-- END claude-memory-guard -->`), and `install.sh` handles all three cases safely:
+
+| Situation | What happens |
+|-----------|-------------|
+| `~/.claude/CLAUDE.md` does not exist | File is created with a minimal header, then the block is appended |
+| File exists, block not yet present | Block is appended; all existing content is preserved |
+| File exists, block already present | Skipped — safe to re-run `install.sh` without duplicating anything |
+
+`uninstall.sh` removes the block cleanly, leaving any other content in the file intact.
 
 The template lives at `templates/global-claude-md-block.md` in this repo if you want to inspect or customise it before installing.
 
