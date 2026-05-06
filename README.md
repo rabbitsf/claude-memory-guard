@@ -174,10 +174,10 @@ The two systems cover different memory layers and must not duplicate each other'
 
 | Responsibility | Owner |
 |---------------|-------|
-| Structured task state (`MEMORY.md`, plan files) | claude-memory-guard |
-| Workflow lifecycle (START / CHECKPOINT / END / RESTORE) | claude-memory-guard |
-| Canonical implementations, `PROJECT_GUIDE.md` | claude-memory-guard |
 | Structured session state (auto-injected, current goals/decisions) | claude-memory-guard |
+| Workflow lifecycle (START / CHECKPOINT / END / RESTORE) | claude-memory-guard |
+| Structured task state (`MEMORY.md`, plan files) | claude-memory-guard |
+| Canonical implementations, `PROJECT_GUIDE.md` | claude-memory-guard |
 | Episodic recall from past conversations | claude-mem |
 | Semantic search across conversation history | claude-mem |
 | AST-aware code structure exploration | claude-mem `smart-explore` |
