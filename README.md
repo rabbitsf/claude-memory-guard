@@ -66,6 +66,7 @@ git pull
     relocate_plan.py                    ← PostToolUse:Write hook (plan file mover)
     end_reminder.py                     ← Stop hook (end-of-turn reminder)
     export_conversation.py              ← PreCompact hook (transcript exporter)
+    dashboard.py                        ← read-only web dashboard (localhost:37778)
 ~/.claude/settings.json                 ← hooks merged in (existing content preserved)
 ~/.claude/CLAUDE.md                     ← coordination rules appended (created if absent)
 ```
@@ -150,11 +151,38 @@ docs/CHANGELOG_AI.md (append-only)
 
 ---
 
+## Dashboard
+
+A read-only web view of every project's memory, at **http://localhost:37778**.
+
+It starts automatically: the `SessionStart` hook checks the port and, if nothing is listening, launches `dashboard.py` as a background process. It keeps running after you quit Claude Code (until you log out, reboot, or stop it), so you can bookmark the URL.
+
+What it shows:
+
+- **Overview** — one card per project with its status, active goal, open plan progress, last activity and warnings (missing `PROJECT_GUIDE.md` / `CHANGELOG_AI.md`, stale canonicals, project folder deleted). Filter by *In progress*, *Open plans*, *Needs attention* or *Idle 30+ days*.
+- **Search** — type in the header to find projects, and every canonical implementation and key decision across all projects that mentions the term (useful before building something that may already exist elsewhere).
+- **Project page** — active session, in-progress block, plans with checkbox progress, canonicals, decisions, changelog entries and `PROJECT_GUIDE.md`.
+
+Projects are discovered from `~/.claude/projects/*/memory/MEMORY.md`. Every file is re-read on each page load, so there is no cache to go stale and nothing is ever written. The server listens on `127.0.0.1` only.
+
+Manual control:
+
+```bash
+python3 ~/.claude/scripts/dashboard.py status   # running?
+python3 ~/.claude/scripts/dashboard.py stop     # stop it
+python3 ~/.claude/scripts/dashboard.py start    # start in background
+python3 ~/.claude/scripts/dashboard.py serve    # run in foreground (debugging)
+```
+
+Log: `~/.claude/memory-guard-dashboard/dashboard.log`. `install.sh` stops an older running version so the next session starts the new one; `uninstall.sh` stops it and removes it.
+
+---
+
 ## Hook overview
 
 | Hook event | Script | Trigger |
 |------------|--------|---------|
-| `SessionStart` | `session_start_reminder.py` | Every new session |
+| `SessionStart` | `session_start_reminder.py` | Every new session (also starts the dashboard if it isn't running) |
 | `PostCompact` | `session_start_reminder.py` | After `/compact` |
 | `PreCompact` | `checkpoint_memory.py` + `export_conversation.py` | Before compaction |
 | `PostToolUse` (all) | `checkpoint_counter.py` | Every tool call |

@@ -28,13 +28,21 @@ if [ -f "$AGENTS_DIR/claude-memory-guard.md" ]; then
 fi
 
 # --- Remove scripts ---
+# Stop the dashboard before its script is removed
+if [ -f "$SCRIPTS_DIR/dashboard.py" ]; then
+  python3 "$SCRIPTS_DIR/dashboard.py" stop >/dev/null 2>&1 || true
+  rm -rf "$HOME/.claude/memory-guard-dashboard"
+  echo -e "${GREEN}✓${RESET} Stopped dashboard"
+fi
+
 for script in \
   session_start_reminder.py \
   checkpoint_memory.py \
   checkpoint_counter.py \
   relocate_plan.py \
   end_reminder.py \
-  export_conversation.py; do
+  export_conversation.py \
+  dashboard.py; do
   if [ -f "$SCRIPTS_DIR/$script" ]; then
     rm "$SCRIPTS_DIR/$script"
     echo -e "${GREEN}✓${RESET} Removed $script"

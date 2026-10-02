@@ -43,11 +43,16 @@ for script in \
   checkpoint_counter.py \
   relocate_plan.py \
   end_reminder.py \
-  export_conversation.py; do
+  export_conversation.py \
+  dashboard.py; do
   cp "$REPO_DIR/scripts/$script" "$SCRIPTS_DIR/$script"
   chmod +x "$SCRIPTS_DIR/$script"
   echo -e "${GREEN}✓${RESET} Copied scripts/$script → $SCRIPTS_DIR/"
 done
+
+# --- Restart the dashboard if an older version is running ---
+# (the SessionStart hook starts it again on the next session)
+"$PYTHON3" "$SCRIPTS_DIR/dashboard.py" stop >/dev/null 2>&1 || true
 
 # --- Merge hooks into settings.json ---
 echo ""

@@ -299,7 +299,18 @@ def stale_canonicals(content: str, project_dir: str) -> list[str]:
     missing = []
     for entry in raw:
         file_part = entry.split(":")[0].strip()
-        if file_part and not (project_path / file_part).exists():
+        # Only path-like tokens (dir/file or name.ext); skip identifiers,
+        # selectors, HTML snippets and placeholders like `{date}.jpg`.
+        if not re.fullmatch(r"[\w./~-]+", file_part):
+            continue
+        if "/" not in file_part and not re.search(r"\.\w{1,5}$", file_part):
+            continue
+        if file_part.startswith("/") and not file_part.startswith(str(Path.home())):
+            continue  # URL route like `/admin/cookies`, not a file
+        path = Path(file_part).expanduser()
+        if not path.is_absolute():
+            path = project_path / path
+        if not path.exists() and file_part not in missing:
             missing.append(file_part)
     return missing
 
@@ -458,6 +469,14 @@ def main() -> int:
         or hook_input.get("cwd")
         or os.getcwd()
     )
+
+    # Bring up the read-only dashboard (localhost:37778) if it isn't running.
+    # Best-effort: a dashboard problem must never break the reminder.
+    try:
+        from dashboard import ensure_running
+        ensure_running()
+    except Exception:
+        pass
 
     # Auto-create missing scaffolding before anything else
     created = ensure_scaffolding(project_dir)
