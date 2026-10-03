@@ -64,7 +64,7 @@ claude-mem (episodic recall) runs alongside claude-memory-guard (workflow discip
 
 **claude-memory-guard is active** if ANY of these are true:
 - This project's MEMORY.md is injected in context (you will see it)
-- This project's CLAUDE.md mentions "claude-memory-guard" or "ai-guardrails"
+- This project's CLAUDE.md mentions "claude-memory-guard"
 
 **If claude-memory-guard IS active → restricted superpowers mode:**
 - Do NOT invoke: `writing-plans`, `executing-plans`, `brainstorming`, `finishing-a-development-branch`

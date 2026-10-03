@@ -3,9 +3,11 @@
 end_reminder.py — Stop hook for claude-memory-guard memory system.
 
 Fires after each Claude response. If the current project has an active
-in-progress task in MEMORY.md, injects a reminder to run the END phase
-when work is complete. Silent when no task is active (Status: NONE or
-completed) to avoid noise during clean sessions.
+in-progress task in MEMORY.md, blocks the stop ONCE per session per goal
+with a reason Claude sees, so it either runs the END phase or says the
+work is not finished yet. Silent when no task is active (Status: NONE or
+completed), when already continuing from a Stop hook, and after the first
+nudge for a given session + goal (marker in ~/.claude/state/).
 
 Fires on: every assistant turn stop.
 """
@@ -81,7 +83,22 @@ def main() -> int:
         "</claude-memory-guard-end-reminder>"
     )
 
-    # print(json.dumps({"systemMessage": message}))
+    # A plain systemMessage is shown to the user only; "block" + reason is the
+    # only way Claude sees it. Nudge once per session+goal to avoid loops/nagging.
+    if hook_input.get("stop_hook_active"):
+        return 0
+    session_id = hook_input.get("session_id") or "nosession"
+    key = re.sub(r"[^\w.-]", "_", f"{session_id}-{goal}")[:150]
+    marker_dir = Path.home() / ".claude" / "state" / "mem-guard-end"
+    marker = marker_dir / key
+    if marker.exists():
+        return 0
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+
+    print(json.dumps({"decision": "block", "reason": message + (
+        "\nIf the work is complete, run END now. If not, reply in one line that "
+        "the task is still in progress and stop.")}))
     return 0
 
 

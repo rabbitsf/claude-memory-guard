@@ -695,7 +695,7 @@ docs/
 CLAUDE.md
 ```
 
-- `docs/` — contains ai-guardrails workflow files (PROJECT_GUIDE.md, plan files, CHANGELOG_AI.md, conversation exports); local scaffolding, not project code
+- `docs/` — contains claude-memory-guard workflow files (PROJECT_GUIDE.md, plan files, CHANGELOG_AI.md, conversation exports); local scaffolding, not project code
 - `CLAUDE.md` — contains AI workflow instructions local to your setup
 
 ---
