@@ -18,6 +18,15 @@ import re
 import sys
 from pathlib import Path
 
+# A status is "clean" (no task in flight) if empty or it STARTS with none / done /
+# complete(d) / a dash — e.g. "DONE — published as 73d9d4c". Same rule in every hook.
+_CLEAN_STATUS = re.compile(r"(none|done|completed?)\b|[—-]?$", re.I)
+
+
+def status_is_clean(status: str) -> bool:
+    return bool(_CLEAN_STATUS.match(status.strip()))
+
+
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors session_start_reminder.py conventions)
@@ -67,7 +76,7 @@ def main() -> int:
         return 0  # No MEMORY.md — nothing to remind
 
     status = active_status(memory).lower()
-    if status in ("none", "completed", "—", "-"):
+    if status_is_clean(status):
         return 0  # Clean session — stay silent
 
     goal = active_goal(memory)

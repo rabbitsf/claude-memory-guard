@@ -13,6 +13,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# A status is "clean" (no task in flight) if empty or it STARTS with none / done /
+# complete(d) / a dash — e.g. "DONE — published as 73d9d4c". Same rule in every hook.
+_CLEAN_STATUS = re.compile(r"(none|done|completed?)\b|[—-]?$", re.I)
+
+
+def status_is_clean(status: str) -> bool:
+    return bool(_CLEAN_STATUS.match(status.strip()))
+
+
 
 def encode_project_path(project_dir: str) -> str:
     """Encode project path to match Claude Code's memory directory naming.
@@ -47,7 +56,7 @@ def is_task_in_progress(active_section: str) -> bool:
     if not status_match:
         return False
     status = status_match.group(1).strip().lower()
-    return status not in ("none", "completed", "—", "-")
+    return not status_is_clean(status)
 
 
 def inprogress_already_set(content: str) -> bool:

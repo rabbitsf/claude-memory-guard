@@ -20,6 +20,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# A status is "clean" (no task in flight) if empty or it STARTS with none / done /
+# complete(d) / a dash — e.g. "DONE — published as 73d9d4c". Same rule in every hook.
+_CLEAN_STATUS = re.compile(r"(none|done|completed?)\b|[—-]?$", re.I)
+
+
+def status_is_clean(status: str) -> bool:
+    return bool(_CLEAN_STATUS.match(status.strip()))
+
+
 
 # ---------------------------------------------------------------------------
 # Templates
@@ -415,7 +424,7 @@ def build_message(
     )
 
     # --- Case 2: In-progress task detected ---
-    if inprogress or status.lower() not in ("none", "completed", "—", "-"):
+    if inprogress or not status_is_clean(status):
         lines = [
             f"<claude-memory-guard-reminder project=\"{project_name}\">",
         ]
