@@ -27,34 +27,20 @@ Always trigger the `claude-memory-guard` subagent proactively at these moments:
 - START creates the plan file; CHECKPOINT marks completed tasks; END marks all done
 - RESTORE reads only the first 15 lines of the plan file to find the resume point
 
-## claude-mem Integration
+## Session History (episodic memory)
 
-claude-mem (episodic recall) runs alongside claude-memory-guard (workflow discipline) with strict role separation — no overlap.
+claude-memory-guard records every session automatically in `~/.claude/memory-guard/history.db`:
+your prompts, what Claude did (tools, files read/edited), and a short AI summary written in the
+background when the session ends (request / investigated / learned / completed / next steps).
+The SessionStart hook injects the last 3 summaries for the current project.
 
-### Role separation
-
-| Responsibility | Owner |
-|---------------|-------|
-| Structured session state (auto-injected, current goals/decisions) | claude-memory-guard |
-| Workflow lifecycle (START / CHECKPOINT / END / RESTORE) | claude-memory-guard |
-| Structured task state (MEMORY.md, plan files) | claude-memory-guard |
-| Canonical implementations, PROJECT_GUIDE.md | claude-memory-guard |
-| Episodic recall from past conversations | claude-mem |
-| Semantic search across conversation history | claude-mem |
-| AST-aware code structure exploration | claude-mem `smart-explore` |
-| Project knowledge corpus building | claude-mem `knowledge-agent` |
-
-### When to use claude-mem
-
-- **During RESTORE**: After claude-memory-guard surfaces MEMORY.md state, invoke `claude-mem:mem-search` to retrieve relevant episodic context not captured in MEMORY.md — especially after a gap of days or a new project session
-- **Code exploration**: Prefer `claude-mem:smart-explore` for deep codebase understanding (AST-aware, token-efficient)
-- **Retrospective analysis**: Use `claude-mem:timeline-report` for project history
-
-### When NOT to use claude-mem (claude-memory-guard owns these)
-
-- Do NOT use `claude-mem:make-plan` when claude-memory-guard is active — claude-memory-guard START phase owns plan files
-- Do NOT use `claude-mem:do` for execution tracking — claude-memory-guard CHECKPOINT/END owns this
-- Do NOT duplicate MEMORY.md structured state into claude-mem corpora
+- **Recall past work** (after a gap, "what did we try?", "why did we…?"):
+  `python3 ~/.claude/scripts/history.py search "<terms>" --project <name>`
+- **Open one session**: `python3 ~/.claude/scripts/history.py show <id-prefix>`
+- **Recent sessions**: `python3 ~/.claude/scripts/history.py recent --project <name>`
+- **Browse**: http://localhost:37778 (Sessions on each project page; header search covers history)
+- History is recall only — MEMORY.md, plan files and PROJECT_GUIDE.md stay the source of truth for
+  current state. Never copy history into MEMORY.md wholesale; record only lasting decisions there.
 
 ## Superpowers: Conditional Auto-Trigger
 

@@ -217,11 +217,18 @@ PROJECT_GUIDE_TEMPLATE = """\
 # ---------------------------------------------------------------------------
 
 def encode_project_path(project_dir: str) -> str:
-    """Match Claude Code's directory → memory path encoding.
-    Claude Code replaces '/' and ' ' with '-', and keeps the leading '-'.
-    e.g. /Users/fung/Claude Projects/gradebook → -Users-fung-Claude-Projects-gradebook
+    """Match Claude Code's directory → ~/.claude/projects/<key> encoding.
+    Current Claude Code replaces every non-alphanumeric character with '-'
+    (e.g. /Users/fung/Claude Projects/rea_badgeprint →
+    -Users-fung-Claude-Projects-rea-badgeprint). Older versions only replaced
+    '/' and ' ', so fall back to that key when only the legacy folder exists.
     """
-    return project_dir.replace("/", "-").replace(" ", "-")
+    key = re.sub(r"[^a-zA-Z0-9]", "-", project_dir)
+    legacy = project_dir.replace("/", "-").replace(" ", "-")
+    projects = Path.home() / ".claude" / "projects"
+    if key != legacy and not (projects / key).exists() and (projects / legacy).exists():
+        return legacy
+    return key
 
 
 def read_memory(project_dir: str) -> str | None:
@@ -473,6 +480,10 @@ def main() -> int:
     except (json.JSONDecodeError, EOFError, ValueError):
         hook_input = {}
 
+    # The history summarizer's own headless `claude -p` run: do nothing.
+    if os.environ.get("MEMORY_GUARD_SUMMARIZER"):
+        return 0
+
     project_dir = (
         os.environ.get("CLAUDE_PROJECT_DIR")
         or hook_input.get("cwd")
@@ -493,6 +504,17 @@ def main() -> int:
     # Now read memory (which may have just been created)
     memory = read_memory(project_dir)
     message = build_message(project_dir, memory, created)
+
+    # Session history: append recent summaries, then ingest/summarize any
+    # sessions that ended without a SessionEnd hook (detached, never blocks).
+    try:
+        import history
+        recent = history.recent_context(project_dir, exclude=hook_input.get("session_id"))
+        if recent:
+            message += "\n" + recent
+        history.spawn("catchup")
+    except Exception:
+        pass
 
     # json.dumps handles all escaping correctly
     output = {

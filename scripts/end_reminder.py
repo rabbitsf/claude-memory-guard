@@ -32,9 +32,7 @@ def status_is_clean(status: str) -> bool:
 # Helpers (mirrors session_start_reminder.py conventions)
 # ---------------------------------------------------------------------------
 
-def encode_project_path(project_dir: str) -> str:
-    """Match Claude Code's directory → memory path encoding."""
-    return project_dir.replace("/", "-").replace(" ", "-")
+from session_start_reminder import encode_project_path  # canonical; do not copy
 
 
 def read_memory(project_dir: str) -> str | None:

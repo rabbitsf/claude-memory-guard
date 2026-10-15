@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # uninstall.sh — claude-memory-guard uninstaller
 # Removes agent, scripts, and hook entries from ~/.claude/settings.json
+# Session history (~/.claude/memory-guard/history.db) is kept unless --purge
 
 set -euo pipefail
 
@@ -20,6 +21,8 @@ echo "==================================="
 echo ""
 
 PYTHON3=$(command -v python3 || true)
+PURGE=false
+[ "${1:-}" = "--purge" ] && PURGE=true
 
 # --- Remove agent ---
 if [ -f "$AGENTS_DIR/claude-memory-guard.md" ]; then
@@ -42,7 +45,8 @@ for script in \
   relocate_plan.py \
   end_reminder.py \
   export_conversation.py \
-  dashboard.py; do
+  dashboard.py \
+  history.py; do
   if [ -f "$SCRIPTS_DIR/$script" ]; then
     rm "$SCRIPTS_DIR/$script"
     echo -e "${GREEN}✓${RESET} Removed $script"
@@ -68,6 +72,7 @@ SCRIPT_NAMES = [
     "relocate_plan.py",
     "end_reminder.py",
     "export_conversation.py",
+    "history.py",
 ]
 
 def references_our_scripts(command_str):
@@ -147,9 +152,18 @@ PYEOF
   fi
 fi
 
+# --- Session history ---
+if [ "$PURGE" = true ]; then
+  rm -rf "$HOME/.claude/memory-guard"
+  echo -e "${GREEN}✓${RESET} Deleted session history (~/.claude/memory-guard)"
+elif [ -d "$HOME/.claude/memory-guard" ]; then
+  echo -e "${YELLOW}Kept${RESET} session history in ~/.claude/memory-guard (run with --purge to delete)"
+fi
+
 echo ""
 echo -e "${GREEN}Uninstall complete.${RESET} Restart Claude Code to apply changes."
 echo ""
 echo -e "${YELLOW}Note:${RESET} Project files (CLAUDE.md, docs/PROJECT_GUIDE.md, MEMORY.md)"
 echo "were NOT removed — those belong to your projects."
 echo ""
+

@@ -18,13 +18,14 @@ claude-memory-guard runs automatically at key moments in your Claude Code sessio
 | Every 10 tool calls (automatic) | **CHECKPOINT** | Saves progress to `MEMORY.md` so context compaction is safe |
 | Code changes complete | **END** | Updates `PROJECT_GUIDE.md`, `CHANGELOG_AI.md`, and `MEMORY.md` |
 | Existing project, no `MEMORY.md` | **ONBOARD** | Retrofits the memory system onto an existing project |
+| Session ends (automatic) | **History** | Records your prompts and Claude's actions, writes a short AI summary — see [Session history](#session-history) |
 
 ---
 
 ## Requirements
 
 - [Claude Code](https://claude.ai/code) (CLI or desktop app)
-- Python 3.8+
+- Python 3.10+ (with SQLite FTS5 — standard in python.org and Homebrew builds)
 
 ---
 
@@ -67,6 +68,8 @@ git pull
     end_reminder.py                     ← Stop hook (end-of-turn reminder)
     export_conversation.py              ← PreCompact hook (transcript exporter)
     dashboard.py                        ← read-only web dashboard (localhost:37778)
+    history.py                          ← SessionEnd hook + session history store/search
+~/.claude/memory-guard/history.db       ← session history (all projects; created on install)
 ~/.claude/settings.json                 ← hooks merged in (existing content preserved)
 ~/.claude/CLAUDE.md                     ← coordination rules appended (created if absent)
 ```
@@ -79,7 +82,7 @@ git pull
 
 **2. How to handle MEMORY.md** — MEMORY.md is auto-injected by Claude Code, so Claude must never re-read it manually. The block encodes this rule and tells Claude to surface any INPROGRESS block immediately on session start.
 
-**3. Plugin integration rules** — if you also use [Superpowers](https://github.com/anthropics/superpowers) or [claude-mem](https://github.com/thedotmack/claude-mem), the block defines strict role boundaries so the tools don't duplicate each other's work.
+**3. Session history and plugin rules**: how Claude searches past sessions (`history.py search`). If you also use [Superpowers](https://github.com/anthropics/superpowers), the block sets role boundaries so the two tools don't duplicate each other's work.
 
 The block is wrapped in sentinel comments (`<!-- BEGIN claude-memory-guard -->` / `<!-- END claude-memory-guard -->`), and `install.sh` handles all three cases safely:
 
@@ -128,7 +131,7 @@ The agent will audit what exists, create any missing files, and seed `MEMORY.md`
 ./uninstall.sh
 ```
 
-This removes the agent, scripts, hook entries from `settings.json`, and the coordination block from `~/.claude/CLAUDE.md`. Project files (`CLAUDE.md`, `docs/`, `MEMORY.md`) are **not** removed — they belong to your projects.
+This removes the agent, scripts, hook entries from `settings.json`, and the coordination block from `~/.claude/CLAUDE.md`. Session history in `~/.claude/memory-guard/` is kept; run `./uninstall.sh --purge` to delete it too. Project files (`CLAUDE.md`, `docs/`, `MEMORY.md`) are **not** removed — they belong to your projects.
 
 ---
 
@@ -145,9 +148,40 @@ docs/PROJECT_GUIDE.md (read on demand)
 
 docs/CHANGELOG_AI.md (append-only)
     └── Audit log of every AI-assisted change
+
+~/.claude/memory-guard/history.db (written by hooks, searched on demand)
+    └── Every session: your prompts, Claude's actions, AI summary
 ```
 
 `MEMORY.md` is stored in `~/.claude/projects/<encoded-path>/memory/` and auto-injected by Claude Code — Claude never needs to read it manually.
+
+---
+
+## Session history
+
+The memory files above hold **current state** (what's true now and what's next). Session history holds **what happened**: every session's prompts, the tools Claude ran and files it touched, and a short summary. Everything lives in one SQLite database, `~/.claude/memory-guard/history.db`, covering all projects.
+
+How it's captured:
+
+- **Prompts and actions** are parsed from Claude Code's own transcripts (`~/.claude/projects/*/*.jsonl`). No AI is involved. Claude Code deletes transcripts after about 30 days, so this is what keeps them permanently.
+- **Summaries** come from one background `claude -p --model haiku` call per session when it ends (about a cent or less). The summary covers request, investigated, learned, completed, next steps and notes. The call runs with hooks disabled and `MEMORY_GUARD_SUMMARIZER=1` set, so it never triggers itself.
+- **Catch-up**: sessions that ended without a `SessionEnd` hook (crash, closed terminal) are picked up at the next session start. At most 3 summaries are written per start.
+
+How it's used:
+
+- The `SessionStart` hook adds the **last 3 session summaries** for the current project to Claude's context.
+- Claude (or you) can search everything:
+
+```bash
+python3 ~/.claude/scripts/history.py search "upload extension" --project quizlet
+python3 ~/.claude/scripts/history.py show b941aabb        # one session in full
+python3 ~/.claude/scripts/history.py recent --project quizlet
+python3 ~/.claude/scripts/history.py summarize --pending 10 --days 30   # backfill summaries
+```
+
+- The dashboard shows a **Sessions** list on every project page, a page per session (summary, your prompts, what Claude did) and full-text history search in the header.
+
+**Migrating from claude-mem:** `install.sh` imports `~/.claude-mem/claude-mem.db` once, without changing it: its sessions, prompts, summaries and observations. Imported observations are shown on the session pages and included in search. Re-running is safe because already-imported rows are skipped. To run it manually: `python3 ~/.claude/scripts/history.py import-claude-mem`.
 
 ---
 
@@ -160,8 +194,9 @@ It starts automatically: the `SessionStart` hook checks the port and, if nothing
 What it shows:
 
 - **Overview** — one card per project with its status, active goal, open plan progress, last activity and warnings (missing `PROJECT_GUIDE.md` / `CHANGELOG_AI.md`, stale canonicals, project folder deleted). Filter by *In progress*, *Open plans*, *Needs attention* or *Idle 30+ days*.
-- **Search** — type in the header to find projects, and every canonical implementation and key decision across all projects that mentions the term (useful before building something that may already exist elsewhere).
-- **Project page** — active session, in-progress block, plans with checkbox progress, canonicals, decisions, changelog entries and `PROJECT_GUIDE.md`.
+- **Search**: type in the header to find matching projects, canonical implementations and key decisions across all projects. This helps before building something that may already exist elsewhere. It also searches session history: prompts, summaries and the files sessions touched.
+- **Project page** — active session, in-progress block, recorded sessions, plans with checkbox progress, canonicals, decisions, changelog entries and `PROJECT_GUIDE.md`.
+- **Session page** — the session's summary, your prompts, the files Claude edited and its full action timeline.
 
 Projects are discovered from `~/.claude/projects/*/memory/MEMORY.md`. Every file is re-read on each page load, so there is no cache to go stale and nothing is ever written. The server listens on `127.0.0.1` only.
 
@@ -188,12 +223,13 @@ Log: `~/.claude/memory-guard-dashboard/dashboard.log`. `install.sh` stops an old
 | `PostToolUse` (all) | `checkpoint_counter.py` | Every tool call |
 | `PostToolUse` (Write) | `relocate_plan.py` | When a plan file is written |
 | `Stop` | `end_reminder.py` | After each assistant response |
+| `SessionEnd` | `history.py hook-session-end` | Session exit; ingests the transcript and writes the summary in the background |
 
 ---
 
 ## Optional companion plugins
 
-claude-memory-guard is designed to work standalone, but integrates cleanly with two Claude Code plugins when both are installed. Each has a strictly separated role — they do not overlap.
+claude-memory-guard is designed to work standalone, but integrates cleanly with Superpowers, and replaces claude-mem.
 
 > **Disclaimer:** Superpowers and claude-mem are independent projects. claude-memory-guard is not affiliated with or endorsed by their respective authors. All product names and trademarks belong to their respective owners.
 
@@ -216,29 +252,9 @@ These rules are included automatically in the coordination block that `install.s
 
 ### claude-mem
 
-[claude-mem](https://github.com/thedotmack/claude-mem) is a Claude Code plugin that provides episodic memory — it records observations from past conversations and lets Claude search and recall them semantically across sessions.
+[claude-mem](https://github.com/thedotmack/claude-mem) is a Claude Code plugin for episodic memory. claude-memory-guard now covers the same ground (see [Session history](#session-history)), so you don't need both. Its history imports with `history.py import-claude-mem`.
 
-**How it works with claude-memory-guard:**
-
-The two systems cover different memory layers and must not duplicate each other's work:
-
-| Responsibility | Owner |
-|---------------|-------|
-| Structured session state (auto-injected, current goals/decisions) | claude-memory-guard |
-| Workflow lifecycle (START / CHECKPOINT / END / RESTORE) | claude-memory-guard |
-| Structured task state (`MEMORY.md`, plan files) | claude-memory-guard |
-| Canonical implementations, `PROJECT_GUIDE.md` | claude-memory-guard |
-| Episodic recall from past conversations | claude-mem |
-| Semantic search across conversation history | claude-mem |
-| AST-aware code structure exploration | claude-mem `smart-explore` |
-| Project knowledge corpus building | claude-mem `knowledge-agent` |
-
-**Recommended RESTORE sequence when both are installed:**
-
-1. claude-memory-guard RESTORE runs first — surfaces `MEMORY.md` state and any in-progress task
-2. Then invoke `claude-mem:mem-search` to retrieve episodic context from past sessions not captured in `MEMORY.md` (especially useful after a gap of several days)
-
-These boundaries are encoded in the coordination block that `install.sh` appends to `~/.claude/CLAUDE.md`. No manual steps needed.
+What you give up by removing it: per-tool-call AI "observations" (we write one summary per session instead), vector/semantic search (we use SQLite full-text search), and its extra skills such as `smart-explore` and `knowledge-agent`.
 
 ---
 

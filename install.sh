@@ -44,7 +44,8 @@ for script in \
   relocate_plan.py \
   end_reminder.py \
   export_conversation.py \
-  dashboard.py; do
+  dashboard.py \
+  history.py; do
   cp "$REPO_DIR/scripts/$script" "$SCRIPTS_DIR/$script"
   chmod +x "$SCRIPTS_DIR/$script"
   echo -e "${GREEN}✓${RESET} Copied scripts/$script → $SCRIPTS_DIR/"
@@ -88,6 +89,9 @@ NEW_HOOKS = {
     "Stop": [
         {"hooks": [{"type": "command", "command": p("end_reminder.py")}]}
     ],
+    "SessionEnd": [
+        {"hooks": [{"type": "command", "command": f"{p('history.py')} hook-session-end"}]}
+    ],
 }
 
 # Load or create settings
@@ -129,6 +133,15 @@ if added:
 if skipped:
     print(f"  Already present (skipped): {', '.join(skipped)}")
 PYEOF
+
+# --- Session history: first ingest + one-time claude-mem import ---
+# Both are idempotent, so re-running install.sh is safe.
+echo ""
+echo "Building session history (~/.claude/memory-guard/history.db) ..."
+"$PYTHON3" "$SCRIPTS_DIR/history.py" backfill | sed 's/^/  /'
+if [ -f "$HOME/.claude-mem/claude-mem.db" ]; then
+  "$PYTHON3" "$SCRIPTS_DIR/history.py" import-claude-mem | sed 's/^/  /'
+fi
 
 # --- Append coordination block to ~/.claude/CLAUDE.md ---
 GLOBAL_CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"

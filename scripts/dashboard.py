@@ -41,6 +41,7 @@ from session_start_reminder import (  # noqa: E402
     plan_file,
     stale_canonicals,
 )
+import history  # noqa: E402  (session history store; opened read-only)
 
 HOST = "127.0.0.1"
 PORT = 37778
@@ -111,7 +112,7 @@ def stop() -> bool:
 def resolve_project_dir(encoded: str) -> tuple[Path, str]:
     """Map an encoded ~/.claude/projects/<name> back to its real directory.
 
-    The encoding is lossy ('/' and ' ' both become '-'), so walk the
+    The encoding is lossy (separators all become '-'), so walk the
     filesystem from '/' and match each child's encoded name as a prefix.
     Returns (deepest existing directory, unmatched remainder); the
     remainder is "" when the project folder itself exists.
@@ -123,8 +124,12 @@ def resolve_project_dir(encoded: str) -> tuple[Path, str]:
         except OSError:
             return best
         for name in names:
-            enc = encode_project_path("/" + name)
-            if rest != enc and not rest.startswith(enc + "-"):
+            # Folder keys exist in both the current encoding (every
+            # non-alphanumeric → '-') and the legacy one ('/' and ' ' only).
+            seg = "/" + name
+            encs = {re.sub(r"[^a-zA-Z0-9]", "-", seg), seg.replace("/", "-").replace(" ", "-")}
+            enc = next((e for e in encs if rest == e or rest.startswith(e + "-")), None)
+            if enc is None:
                 continue
             child = cur / name
             if not child.is_dir():
@@ -157,7 +162,16 @@ def memory_dirs() -> list[tuple[Path, Path | None, str]]:
         elif path != Path.home() and not any(p.startswith(".") for p in path.parts):
             found.append((d, path, path.name))
     containers = {p.parent for _, p, _ in found if p}
-    return [f for f in found if f[1] not in containers]
+    found = [f for f in found if f[1] not in containers]
+    # A project opened under both key encodings has two memory dirs; Claude
+    # Code loads the one matching encode_project_path, so show only that one.
+    by_path: dict[Path, list] = {}
+    for f in found:
+        if f[1]:
+            by_path.setdefault(f[1], []).append(f)
+    drop = {id(f) for fs in by_path.values() if len(fs) > 1
+            for f in fs if f[0].name != encode_project_path(str(f[1]))}
+    return [f for f in found if id(f) not in drop]
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +325,29 @@ def project_data(mem_dir: Path, proj: Path | None, name: str,
     return data
 
 
+def history_conn():
+    """Read-only handle on the history store, or None before first backfill."""
+    if not history.DB_PATH.exists():
+        return None
+    return history.connect(readonly=True)
+
+
+def session_counts() -> dict[str, dict]:
+    conn = history_conn()
+    if not conn:
+        return {}
+    with conn:
+        return {r["project"]: {"sessions": r["n"], "last": r["last"]} for r in conn.execute(
+            "SELECT project, COUNT(*) n, MAX(COALESCE(ended_at, started_at)) last "
+            "FROM sessions GROUP BY project")}
+
+
+def with_label(rows: list[dict]) -> list[dict]:
+    for r in rows:
+        r["label"] = history.project_label(r["project"], r.get("cwd"))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
@@ -325,10 +362,34 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/":
                 return self.send(200, "text/html; charset=utf-8", PAGE.encode())
             if url.path == "/api/projects":
+                counts = session_counts()
+                projects = [project_data(*m) for m in memory_dirs()]
+                for p in projects:
+                    p["history"] = counts.get(p["id"], {"sessions": 0, "last": None})
                 return self.json({
                     "generated": datetime.now().isoformat(timespec="seconds"),
-                    "projects": [project_data(*m) for m in memory_dirs()],
+                    "projects": projects,
                 })
+            qs = {k: v[0] for k, v in parse_qs(url.query).items()}
+            if url.path.startswith("/api/") and url.path[5:] in ("sessions", "session", "search"):
+                conn = history_conn()
+                if not conn:
+                    return self.json({"error": "no history yet — run history.py backfill",
+                                      "sessions": [], "hits": []})
+                with conn:
+                    if url.path == "/api/sessions":
+                        rows = history.recent_sessions(conn, qs.get("project") or None,
+                                                       min(int(qs.get("limit", 25)), 100),
+                                                       int(qs.get("offset", 0)))
+                        return self.json({"sessions": with_label(rows)})
+                    if url.path == "/api/session":
+                        d = history.session_detail(conn, qs.get("id", "") or "-")
+                        if not d:
+                            return self.json({"error": "not found"}, 404)
+                        with_label([d["session"]])
+                        return self.json(d)
+                    hits = history.search(conn, qs.get("q", ""), qs.get("project") or None, 60)
+                    return self.json({"hits": with_label(hits)})
             if url.path == "/api/project":
                 pid = parse_qs(url.query).get("id", [""])[0]
                 match = [m for m in memory_dirs() if m[0].name == pid]
@@ -469,6 +530,29 @@ summary .date { color: var(--muted); font-size: 12px; font-variant-numeric: tabu
 mark { background: var(--warn-soft); color: inherit; }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); padding: 30px; text-align: center; }
+.sess { display: flex; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line);
+  color: var(--ink); align-items: baseline; }
+.sess:last-child { border-bottom: 0; }
+.sess:hover { background: var(--bg); text-decoration: none; }
+.sess .date { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; width: 84px; flex: none; }
+.sess .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sess .sub { color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; }
+.sess .n { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.panel.flush { padding: 0; overflow: hidden; }
+.prompt { border-left: 3px solid var(--busy); padding: 6px 12px; margin: 8px 0;
+  background: var(--busy-soft); border-radius: 0 8px 8px 0; white-space: pre-wrap;
+  overflow-wrap: anywhere; }
+.prompt .when { color: var(--muted); font-size: 11px; display: block; }
+.sumgrid { display: grid; grid-template-columns: 130px 1fr; gap: 8px 16px; }
+.sumgrid dt { color: var(--muted); font-weight: 600; }
+.sumgrid dd { margin: 0; overflow-wrap: anywhere; }
+.acts { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.acts div { padding: 2px 0; overflow-wrap: anywhere; }
+.acts .k { display: inline-block; width: 56px; color: var(--muted); }
+.k-edit { color: var(--accent) !important; } .k-run { color: var(--warn) !important; }
+@media (max-width: 600px) { .sumgrid { grid-template-columns: 1fr; } .sess .n { display: none; } }
 @media (max-width: 600px) {
   header, main { padding-left: 16px; padding-right: 16px; }
   .grid { grid-template-columns: 1fr; }
@@ -480,7 +564,7 @@ mark { background: var(--warn-soft); color: inherit; }
 <body>
 <header>
   <h1><a href="#/">Memory Guard</a></h1>
-  <input type="search" id="q" placeholder="Search projects, canonicals, decisions…" autocomplete="off">
+  <input type="search" id="q" placeholder="Search projects, decisions, past sessions…" autocomplete="off">
   <span class="gen" id="gen"></span>
 </header>
 <main id="app"><div class="empty">Loading…</div></main>
@@ -557,6 +641,37 @@ function warnings(p) {
 }
 const busy = p => p.inprogress || ACTIVE.test(p.status || '');
 
+const day = ts => (ts || '').slice(0, 10);
+const first = s => (String(s || '').split('\n').map(l => l.replace(/^[\s\-•*]+/, '').trim()).find(Boolean) || '');
+function sessRow(s, showProject) {
+  const sum = s.summary;
+  const sub = sum ? first(sum.completed) || first(sum.next_steps) : '';
+  return `<a class="sess" href="#/s/${encodeURIComponent(s.id)}">
+    <span class="date">${esc(day(s.ended_at || s.started_at))}</span>
+    <span class="grow">${showProject ? `<span class="badge">${esc(s.label)}</span> ` : ''}${esc(first(s.title) || 'Untitled session')}
+      ${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+    <span class="n">${s.n_prompts || 0} prompts · ${s.n_actions || 0} actions${sum ? '' : ' · no summary'}</span></a>`;
+}
+let searchTimer = null, lastSearch = '';
+function historySearch(q, project) {
+  const box = $('#hist-hits');
+  if (!box) return;
+  if (q.length < 3) { box.innerHTML = ''; return; }
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    lastSearch = q;
+    const r = await fetch('/api/search?q=' + encodeURIComponent(q) + (project ? '&project=' + encodeURIComponent(project) : ''));
+    const d = await r.json();
+    if (lastSearch !== q || !$('#hist-hits')) return;
+    const hits = d.hits || [];
+    const hl = s => esc(s).replace(/\[([^\]]*)\]/g, '<mark>$1</mark>');
+    $('#hist-hits').innerHTML = `<h2>Session history matching “${esc(q)}” (${hits.length}${hits.length === 60 ? '+' : ''})</h2>
+      <div class="panel results">${hits.length ? hits.map(h => `<div class="hit">
+        <div class="src"><a href="#/s/${encodeURIComponent(h.session_id)}">${esc(day(h.ts))} · ${esc(h.label)}</a> · ${esc(h.kind)}</div>
+        <div>${hl(h.snip)}</div></div>`).join('') : `<div class="muted">${esc(d.error || 'No matches.')}</div>`}</div>`;
+  }, 250);
+}
+
 async function load() {
   const r = await fetch('/api/projects');
   const data = await r.json();
@@ -576,7 +691,8 @@ function card(p) {
       <div class="bar"><i style="width:${100 * plan.done / plan.total}%"></i></div></div>` : ''}
     <div class="meta"><span>Active ${ago(p.last_activity)}</span>
       <span>${p.plans.length} plan${p.plans.length === 1 ? '' : 's'}${open.length ? ` · ${open.length} open` : ''}</span>
-      <span>${p.changelog_count} changelog entr${p.changelog_count === 1 ? 'y' : 'ies'}</span></div>
+      <span>${p.changelog_count} changelog entr${p.changelog_count === 1 ? 'y' : 'ies'}</span>
+      <span>${p.history?.sessions || 0} sessions</span></div>
     ${w.length ? `<div class="warns">${w.map(x => `<span class="badge warn">${esc(x)}</span>`).join('')}</div>` : ''}
   </a>`;
 }
@@ -614,12 +730,20 @@ function renderOverview() {
       <div class="stat"><b>${n('busy')}</b><span>in progress</span></div>
       <div class="stat"><b>${projects.reduce((s, p) => s + openPlans(p).length, 0)}</b><span>open plans</span></div>
       <div class="stat"><b>${n('attention')}</b><span>need attention</span></div>
+      <div class="stat"><b>${projects.reduce((s, p) => s + (p.history?.sessions || 0), 0)}</b><span>sessions recorded</span></div>
     </div>
     <div class="chips">${Object.keys(labels).map(k =>
       `<button class="chip ${k === filter ? 'on' : ''}" data-f="${k}">${labels[k]} · ${n(k)}</button>`).join('')}</div>
     ${shown.length ? `<div class="grid">${shown.map(card).join('')}</div>` : '<div class="empty">No projects match.</div>'}
-    ${hits}`;
+    ${hits}
+    <div id="hist-hits"></div>
+    ${q ? '' : '<h2>Recent sessions</h2><div class="panel flush" id="recent"><div class="empty">Loading…</div></div>'}`;
   app.querySelectorAll('.chip').forEach(b => b.onclick = () => { filter = b.dataset.f; renderOverview(); });
+  if (q) historySearch(q);
+  else fetch('/api/sessions?limit=15').then(r => r.json()).then(d => {
+    const el = $('#recent');
+    if (el) el.innerHTML = d.sessions.length ? d.sessions.map(s => sessRow(s, true)).join('') : `<div class="empty">${esc(d.error || 'No sessions yet.')}</div>`;
+  });
 }
 
 async function renderProject(id) {
@@ -652,6 +776,10 @@ async function renderProject(id) {
     <h2>In-progress work block</h2>
     <div class="panel md">${p.inprogress_text ? md(p.inprogress_text) : '<span class="muted">Empty — no task in flight.</span>'}</div>
 
+    <h2>Sessions</h2>
+    <div class="panel flush" id="proj-sessions"><div class="empty">Loading…</div></div>
+    <div style="margin-top:8px"><button class="chip" id="more-sess" hidden>Show older sessions</button></div>
+
     <h2>Plans (${p.plans.length})</h2>
     ${p.plans.length ? p.plans.map((pl, i) => `${i === 6 ? `<details class="more"><summary><span class="grow muted">${p.plans.length - 6} older plans</span></summary><div class="body" style="padding-top:10px">` : ''}<details>
       <summary><span class="grow">${esc(pl.title)}<br><span class="muted" style="font-size:12px">${esc(pl.file)}${pl.progress ? ' · ' + esc(pl.progress) : ''}</span></span>
@@ -679,16 +807,70 @@ async function renderProject(id) {
     <h2>Raw MEMORY.md</h2>
     <details><summary><span class="grow">Show file</span></summary><div class="body md"><pre><code>${esc(p.memory_raw)}</code></pre></div></details>`;
   window.scrollTo(0, 0);
+  let offset = 0;
+  const more = async () => {
+    const d = await (await fetch(`/api/sessions?project=${encodeURIComponent(p.id)}&limit=20&offset=${offset}`)).json();
+    const el = $('#proj-sessions');
+    if (!el) return;
+    if (!offset) el.innerHTML = '';
+    el.insertAdjacentHTML('beforeend', d.sessions.map(s => sessRow(s, false)).join('') ||
+      (offset ? '' : `<div class="empty">${esc(d.error || 'No recorded sessions.')}</div>`));
+    offset += d.sessions.length;
+    $('#more-sess').hidden = d.sessions.length < 20;
+  };
+  $('#more-sess').onclick = more;
+  more();
+}
+
+async function renderSession(id) {
+  app.innerHTML = '<div class="empty">Loading…</div>';
+  const d = await (await fetch('/api/session?id=' + encodeURIComponent(id))).json();
+  if (d.error) { app.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+  const s = d.session;
+  const fields = [['request', 'Request'], ['investigated', 'Investigated'], ['learned', 'Learned'],
+                  ['completed', 'Completed'], ['next_steps', 'Next steps'], ['notes', 'Notes']];
+  const summary = m => `<dl class="sumgrid">${fields.filter(([k]) => (m[k] || '').trim())
+    .map(([k, l]) => `<dt>${l}</dt><dd class="md">${md(m[k])}</dd>`).join('')}</dl>`;
+  const edited = [...new Set(d.actions.filter(a => a.kind === 'edit').map(a => a.target))];
+  const time = ts => ts ? new Date(ts).toLocaleString() : '';
+  app.innerHTML = `
+    <div class="muted"><a href="#/p/${encodeURIComponent(s.project)}">${esc(s.label)}</a> · session ${esc(s.id.slice(0, 8))}</div>
+    <h1 style="margin:4px 0 0;font-size:22px">${esc(first(s.title) || first(d.summaries[0]?.request) || 'Untitled session')}</h1>
+    <div class="meta" style="margin-top:6px"><span>${esc(time(s.started_at))} → ${esc(time(s.ended_at))}</span>
+      <span>${d.prompts.length} prompts</span><span>${d.actions.length} actions</span><span>${edited.length} file${edited.length === 1 ? '' : 's'} edited</span>
+      <span>source: ${esc(s.source)}</span></div>
+
+    <h2>Summary</h2>
+    ${d.summaries.length ? `<div class="panel">${summary(d.summaries[0])}
+      <div class="muted" style="font-size:12px;margin-top:8px">${esc(d.summaries[0].source)} · ${esc(time(d.summaries[0].ts))}</div></div>
+      ${d.summaries.length > 1 ? `<details style="margin-top:8px"><summary><span class="grow muted">${d.summaries.length - 1} earlier summaries</span></summary><div class="body">
+        ${d.summaries.slice(1).map(m => `<div style="padding-top:12px">${summary(m)}<div class="muted" style="font-size:12px">${esc(m.source)} · ${esc(time(m.ts))}</div></div>`).join('<hr style="border:0;border-top:1px solid var(--line)">')}</div></details>` : ''}`
+      : '<div class="panel muted">No summary yet — it is written in the background when the session ends.</div>'}
+
+    <h2>Your prompts (${d.prompts.length})</h2>
+    ${d.prompts.length ? d.prompts.map(p => `<div class="prompt"><span class="when">${esc(time(p.ts))}</span>${esc(p.text)}</div>`).join('') : '<div class="panel muted">None recorded.</div>'}
+
+    <h2>What Claude did (${d.actions.length})</h2>
+    ${edited.length ? `<div class="panel" style="margin-bottom:8px"><b>Files edited</b><ul class="list acts">${edited.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>` : ''}
+    ${d.actions.length ? `<details><summary><span class="grow">Full action timeline</span></summary><div class="body acts" style="padding-top:10px">
+      ${d.actions.map(a => `<div><span class="k k-${a.kind}">${esc(a.kind)}</span>${esc(a.tool)} ${esc(a.target || '')}</div>`).join('')}</div></details>` : '<div class="panel muted">No actions recorded.</div>'}
+
+    ${d.observations.length ? `<h2>Observations (imported from claude-mem, ${d.observations.length})</h2>
+      ${d.observations.map(o => `<details><summary><span class="badge">${esc(o.type)}</span><span class="grow">${esc(o.title)}</span><span class="date">${esc(day(o.ts))}</span></summary>
+        <div class="body md">${o.subtitle ? `<p><em>${esc(o.subtitle)}</em></p>` : ''}${md(o.narrative)}</div></details>`).join('')}` : ''}`;
+  window.scrollTo(0, 0);
 }
 
 async function route() {
   const m = location.hash.match(/^#\/p\/(.+)$/);
   if (m) return renderProject(decodeURIComponent(m[1]));
+  const sm = location.hash.match(/^#\/s\/(.+)$/);
+  if (sm) return renderSession(decodeURIComponent(sm[1]));
   await load();
   renderOverview();
 }
 $('#q').addEventListener('input', () => {
-  if (location.hash.startsWith('#/p/')) location.hash = '#/'; else renderOverview();
+  if (location.hash.startsWith('#/p/') || location.hash.startsWith('#/s/')) location.hash = '#/'; else renderOverview();
 });
 window.addEventListener('hashchange', route);
 route().catch(e => app.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`);

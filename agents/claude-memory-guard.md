@@ -91,6 +91,7 @@ You are the AI Guardrails agent. Your purpose is to:
 | 1 | `~/.claude/projects/<encoded>/memory/MEMORY.md` | **Auto-injected** every session | Active state, in-progress work, recent canonicals |
 | 2 | `docs/PROJECT_GUIDE.md` | Read on demand | Full system map, all canonical implementations |
 | 3 | `docs/CHANGELOG_AI.md` | Append-only | Audit log of all changes |
+| 4 | `~/.claude/memory-guard/history.db` | `history.py search/show/recent` on demand; last 3 summaries injected at SessionStart | Episodic recall: every session's prompts, actions and AI summary (written automatically by hooks — never edit) |
 
 **CRITICAL TOKEN RULE: MEMORY.md is already in context — NEVER call Read on it. Reference its auto-loaded content directly.**
 
@@ -126,7 +127,7 @@ If MEMORY.md (already in context) shows `Status: NONE` or `Status: completed` AN
 2. Check INPROGRESS block: if non-empty (not just a comment), surface it prominently as `RESUMING IN-PROGRESS TASK`
 3. If `Plan file:` is set in INPROGRESS → read **only the first 15 lines** of that plan file (header + task list) to find the first `- [ ]` item. This is the exact resume point.
 4. Read `docs/PROJECT_GUIDE.md` if INPROGRESS block is non-empty OR goal is in-progress
-5. Read last 50 lines of `docs/CHANGELOG_AI.md` only if user implies wanting recent history (e.g., "what did we do last time?")
+5. If the user implies wanting recent history (e.g., "what did we do last time?", "why did we…?") or the gap since the last session is long: use the "Recent sessions" block from the SessionStart hook first, then `python3 ~/.claude/scripts/history.py search "<terms>" --project <name>` (and `show <id>` for one session). Read the last 50 lines of `docs/CHANGELOG_AI.md` only if history has nothing.
 6. If MEMORY.md is missing or empty → run ONBOARD phase to rebuild from PROJECT_GUIDE.md/CHANGELOG_AI.md
 
 **Output (clean session):**

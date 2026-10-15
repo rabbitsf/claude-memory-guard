@@ -21,12 +21,7 @@ from datetime import datetime
 # Path resolution (dynamic — no hardcoded project paths)
 # ---------------------------------------------------------------------------
 
-def encode_project_path(project_dir: str) -> str:
-    """Encode project path to match Claude Code's memory directory naming.
-    Claude Code replaces '/' and ' ' with '-', and keeps the leading '-'.
-    e.g. /Users/fung/Claude Projects/gradebook → -Users-fung-Claude-Projects-gradebook
-    """
-    return project_dir.replace("/", "-").replace(" ", "-")
+from session_start_reminder import encode_project_path  # canonical; do not copy
 
 
 def get_claude_dir(project_dir: str) -> Path:
