@@ -21,9 +21,10 @@ from datetime import datetime
 from pathlib import Path
 
 # A status is "clean" (no task in flight) if empty or it STARTS with none / done /
-# complete(d) / a dash — e.g. "DONE — published as 73d9d4c". Canonical: the other
+# idle / complete(d) / a dash — e.g. "DONE — published as 73d9d4c". Leading
+# Markdown is skipped, since END writes "**COMPLETE** …". Canonical: the other
 # hooks import this; never copy it.
-_CLEAN_STATUS = re.compile(r"(none|done|completed?)\b|[—-]?$", re.I)
+_CLEAN_STATUS = re.compile(r"[*_`\s]*(none|done|idle|completed?)\b|[—-]?$", re.I)
 
 
 def status_is_clean(status: str) -> bool:
